@@ -1,0 +1,6 @@
+https://github.com/secsome/sohook
+https://github.com/scanmem/scanmem
+https://www.kernel.org/doc/html/v5.8/filesystems/proc.html
+https://blog.f0b.org/2022/05/process-injection-on-linux-injecting-into-processes/
+https://github.com/kubo/injector
+https://github.com/gaffe23/linux-inject
