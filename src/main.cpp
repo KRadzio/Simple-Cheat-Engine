@@ -77,6 +77,10 @@ void ScanForValue(unsigned long value, unsigned int pid, int *matches, struct se
                 addresses.emplace_front(i + j);
                 (*matches)++;
             }
+            oneByte = 0;
+            twoBytes = 0;
+            fourBytes = 0;
+            eightBytes = 0;
         }
     }
     printf("Found %d matches\n", *matches);
@@ -120,9 +124,50 @@ void Rescan(unsigned long value, unsigned int pid, int *matches)
         }
         else
             i = addresses.erase(i);
+        oneByte = 0;
+        twoBytes = 0;
+        fourBytes = 0;
+        eightBytes = 0;
     }
     printf("Found %d matches\n", *matches);
     ptrace(PT_DETACH, pid, NULL, NULL);
+}
+
+unsigned long FindPlayerStruct(unsigned int pid)
+{
+    unsigned long address = 0;
+    ptrace(PT_ATTACH, pid, NULL, NULL);
+    for (auto i : addresses)
+    {
+        int ammo1 = ptrace(PTRACE_PEEKDATA, pid, i + 220, 0);
+        int ammo2 = ptrace(PTRACE_PEEKDATA, pid, i + 224, 0);
+        if (ammo1 == 200 && ammo2 == 50)
+        {
+            address = i;
+            break;
+        }
+    }
+    ptrace(PT_DETACH, pid, NULL, NULL);
+    addresses.clear();
+    return address;
+}
+
+void FreezeHealth(unsigned int pid, unsigned long playerStructAddress)
+{
+    while (true)
+    {
+        ptrace(PT_ATTACH, pid, NULL, NULL);
+        int health = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
+        if (health < 400)
+        {
+            unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress - 44, 0);
+            int newhealth = 400;
+            ptrace(PTRACE_POKEDATA, pid, mobjPtr + 196, newhealth);
+            ptrace(PTRACE_POKEDATA, pid, playerStructAddress, newhealth);
+        }
+        ptrace(PT_DETACH, pid, NULL, NULL);
+        sleep(1);
+    }
 }
 
 int main()
@@ -184,6 +229,12 @@ int main()
     scanf("%lu", &value);
 
     Rescan(value, pid, &matches);
+
+    unsigned long playerStructAddress = FindPlayerStruct(pid);
+
+    printf("%lx \n", playerStructAddress);
+
+    FreezeHealth(pid, playerStructAddress);
 
     fclose(mapFile);
 
