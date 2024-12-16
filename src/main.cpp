@@ -136,7 +136,9 @@ void Rescan(unsigned long value, unsigned int pid, int *matches)
 unsigned long FindPlayerStruct(unsigned int pid)
 {
     unsigned long address = 0;
+    int status;
     ptrace(PT_ATTACH, pid, NULL, NULL);
+    waitpid(pid, &status, 0);
     for (auto i : addresses)
     {
         int ammo1 = ptrace(PTRACE_PEEKDATA, pid, i + 220, 0);
@@ -154,20 +156,24 @@ unsigned long FindPlayerStruct(unsigned int pid)
 
 void FreezeHealth(unsigned int pid, unsigned long playerStructAddress)
 {
+    ptrace(PTRACE_SEIZE, pid, NULL, NULL);
+    int status;
     while (true)
     {
-        ptrace(PT_ATTACH, pid, NULL, NULL);
+        ptrace(PTRACE_INTERRUPT, pid, NULL, NULL);
+        waitpid(pid, &status, 0);
         int health = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
-        if (health < 400)
+        if (health < 800)
         {
             unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress - 44, 0);
-            int newhealth = 400;
+            int newhealth = 800;
             ptrace(PTRACE_POKEDATA, pid, mobjPtr + 196, newhealth);
             ptrace(PTRACE_POKEDATA, pid, playerStructAddress, newhealth);
         }
-        ptrace(PT_DETACH, pid, NULL, NULL);
+        ptrace(PTRACE_CONT, pid, NULL, NULL);
         sleep(1);
     }
+    ptrace(PT_DETACH, pid, NULL, NULL);
 }
 
 int main()
