@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/wait.h>
+#include <pthread.h>
 
 #include <iostream>
 #include <list>
@@ -15,6 +16,8 @@
 #define BUFF_SIZE 128
 
 std::list<unsigned long> addresses;
+pthread_mutex_t mutex;
+int run = 1;
 
 struct sector
 {
@@ -29,6 +32,12 @@ struct sector
     int devMinor;
     int incode; // zero = unused
     char name[BUFF_SIZE];
+};
+
+struct dataForThread
+{
+    unsigned int pid;
+    unsigned long playerStructAddress;
 };
 
 // think about how to get the value
@@ -154,11 +163,16 @@ unsigned long FindPlayerStruct(unsigned int pid)
     return address;
 }
 
-void FreezeHealth(unsigned int pid, unsigned long playerStructAddress)
+void *FreezeHealth(void *data)
 {
+    struct dataForThread *inter = (struct dataForThread *)data;
+    unsigned int pid = inter->pid;
+    unsigned long playerStructAddress = inter->playerStructAddress;
+
     ptrace(PTRACE_SEIZE, pid, NULL, NULL);
     int status;
-    while (true)
+    int runL = 1;
+    while (runL)
     {
         ptrace(PTRACE_INTERRUPT, pid, NULL, NULL);
         waitpid(pid, &status, 0);
@@ -172,12 +186,20 @@ void FreezeHealth(unsigned int pid, unsigned long playerStructAddress)
         }
         ptrace(PTRACE_CONT, pid, NULL, NULL);
         sleep(1);
+        pthread_mutex_lock(&mutex);
+        if (!run)
+            runL = 0;
+        pthread_mutex_unlock(&mutex);
     }
     ptrace(PT_DETACH, pid, NULL, NULL);
+
+    return NULL;
 }
 
 int main()
 {
+    pthread_mutex_init(&mutex, NULL);
+
     unsigned int pid = 0;
 
     char path[BUFF_SIZE];
@@ -226,7 +248,7 @@ int main()
 
         lineCounter++;
     }
-    ptrace(PTRACE_CONT, pid, 0, 0);
+    fclose(mapFile);
 
     scanf("%lu", &value);
 
@@ -240,9 +262,25 @@ int main()
 
     printf("%lx \n", playerStructAddress);
 
-    FreezeHealth(pid, playerStructAddress);
+    struct dataForThread dt;
 
-    fclose(mapFile);
+    dt.pid = pid;
+    dt.playerStructAddress = playerStructAddress;
+
+    pthread_t freezeThread;
+
+    pthread_create(&freezeThread, NULL, FreezeHealth, (void *)(&dt));
+
+    printf("enter any key to stop\n");
+
+    getchar();
+    getchar();
+
+    pthread_mutex_lock(&mutex);
+    run = 0;
+    pthread_mutex_unlock(&mutex);
+
+    pthread_join(freezeThread, NULL);
 
     // closedir(dir);
     // sizeof(long) == 8
