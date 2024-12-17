@@ -11,9 +11,11 @@ CheatEngine &CheatEngine::GetInstance()
 
 void CheatEngine::MainLoop()
 {
-    // ImGui::Begin("Test",NULL);
-    // ImGui::Text("aaaaaaaaaa");
-    // ImGui::End();
+    Value v;
+    v.address = 1000;
+    v.size = 2;
+    v.value = 5;
+    WriteValueBackToMemory(v);
     std::cout << "Enter pid \n";
     std::cin >> pid;
     filepath = "/proc/" + std::to_string(pid) + "/exe";
@@ -41,7 +43,7 @@ void CheatEngine::MainLoop()
 
     printf("%lx \n", playerStructAddress);
 
-    freezeThread = std::thread(&CheatEngine::FreezeHealth, this);
+    freezeThread = std::thread(&CheatEngine::FreezeValues, this);
 
     printf("enter any key to stop\n");
 
@@ -52,7 +54,9 @@ void CheatEngine::MainLoop()
     run = false;
     mutex.unlock();
 
-    freezeThread.join();
+    if (freezeThread.joinable())
+        freezeThread.join();
+    valuesToFreeze.clear();
 }
 
 void CheatEngine::AddUsefulSectors()
@@ -60,7 +64,7 @@ void CheatEngine::AddUsefulSectors()
     char *line = NULL;
     size_t len = 0;
     FILE *mapFile = fopen(filepath.c_str(), "r");
-    struct sector s;
+    struct Sector s;
 
     while (getline(&line, &len, mapFile) != -1)
     {
@@ -178,12 +182,52 @@ void CheatEngine::Rescan()
     ptrace(PT_DETACH, pid, NULL, NULL);
 }
 
+void CheatEngine::FreezeValues()
+{
+    unsigned int pid;
+    mutex.lock();
+    pid = this->pid;
+    mutex.unlock();
+
+    ptrace(PTRACE_SEIZE, pid, NULL, NULL);
+    int status;
+    int runL = 1;
+    while (runL)
+    {
+        ptrace(PTRACE_INTERRUPT, pid, NULL, NULL);
+        waitpid(pid, &status, 0);
+        mutex.lock();
+        for (auto v : valuesToFreeze)
+            WriteValueBackToMemory(v);
+        mutex.unlock();
+        ptrace(PTRACE_CONT, pid, NULL, NULL);
+        sleep(1);
+        mutex.lock();
+        if (!run)
+            runL = 0;
+        mutex.unlock();
+    }
+    ptrace(PT_DETACH, pid, NULL, NULL);
+}
+
+void CheatEngine::WriteValueBackToMemory(Value &v)
+{
+    long mask = 0xFFFFFFFFFFFFFFFF;
+    mask = mask << (v.size * 8);
+    long newValue = ptrace(PTRACE_PEEKDATA, pid, v.address, 0);
+    // to not override the other bytes that may be used by other things in game
+    newValue = newValue & mask;
+    newValue += v.value;
+    ptrace(PTRACE_POKEDATA, pid, v.address, newValue);
+}
+
 void CheatEngine::FindPlayerStructAddress()
 {
     unsigned long address = 0;
     int status;
     ptrace(PT_ATTACH, pid, NULL, NULL);
     waitpid(pid, &status, 0);
+    // search relative to health pos
     for (auto i : addresesWithMatchingValue)
     {
         int ammo1 = ptrace(PTRACE_PEEKDATA, pid, i + 220, 0);
@@ -195,51 +239,42 @@ void CheatEngine::FindPlayerStructAddress()
             break;
         }
     }
-    ptrace(PT_DETACH, pid, NULL, NULL);
-    addresesWithMatchingValue.clear();
+
     // the player struct in DOOM starts 44 bytes before the health value
     playerStructAddress = address - 44;
+    AddValuesToFreeze();
+    ptrace(PT_DETACH, pid, NULL, NULL);
+    addresesWithMatchingValue.clear();
 }
 
-void CheatEngine::FreezeHealth()
+void CheatEngine::AddValuesToFreeze()
 {
-    unsigned int pid;
-    unsigned long playerStructAddress;
-    mutex.lock();
-    pid = this->pid;
-    playerStructAddress = this->playerStructAddress;
-    mutex.unlock();
-
-    ptrace(PTRACE_SEIZE, pid, NULL, NULL);
-    int status;
-    int runL = 1;
-    while (runL)
-    {
-        ptrace(PTRACE_INTERRUPT, pid, NULL, NULL);
-        waitpid(pid, &status, 0);
-        // the health is stored in int (4 bytes) however ptrace writes a long value (and long has 8 bytes in linux)
-        long health = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress + 44, 0);
-        long otherValue = health & 0xFFFFFFFF00000000;
-        health = health & 0x00000000FFFFFFFF;
-        if (health < 800)
-        {
-            // pointers are eight bytes long
-            unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
-            long newhealth = 800 + otherValue; // we have to save the other value without overwriting it
-            ptrace(PTRACE_POKEDATA, pid, playerStructAddress + 44, newhealth);
-            // 
-            health = ptrace(PTRACE_PEEKDATA, pid, mobjPtr + 196, 0);
-            otherValue = health & 0xFFFFFFFF00000000;
-            health = health & 0x00000000FFFFFFFF;
-            newhealth = 800 + otherValue;
-            ptrace(PTRACE_POKEDATA, pid, mobjPtr + 196, newhealth);
-        }
-        ptrace(PTRACE_CONT, pid, NULL, NULL);
-        sleep(1);
-        mutex.lock();
-        if (!run)
-            runL = 0;
-        mutex.unlock();
-    }
-    ptrace(PT_DETACH, pid, NULL, NULL);
+    // relative to the begining of the struct
+    // mobj
+    Value v;
+    unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
+    v.address = mobjPtr + 196;
+    v.value = 800;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
+    // player health
+    v.address = playerStructAddress + 44;
+    v.value = 800;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
+    // player armor
+    v.address = playerStructAddress + 48;
+    v.value = 200;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
+    //  armor flag
+    v.address = playerStructAddress + 64;
+    v.value = 2;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
+    //  ammo
+    v.address = playerStructAddress + 252;
+    v.value = 100;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
 }

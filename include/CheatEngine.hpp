@@ -4,6 +4,7 @@
 // standard c libraires
 #include <unistd.h>
 #include <dirent.h>
+#include <string.h>
 
 // system c libraires
 #include <sys/ptrace.h>
@@ -20,6 +21,7 @@
 // project headers
 #include "Sector.hpp"
 #include "Gui.hpp"
+#include "Value.hpp"
 
 #define DOOM "/usr/bin/dsda-doom"
 #define MAX_PATH_LENGTH 128
@@ -35,8 +37,13 @@ private:
     void AddUsefulSectors();
     void ScanForValue();
     void Rescan();
-    void FindPlayerStructAddress();
-    void FreezeHealth();
+    void FreezeValues();
+    void WriteValueBackToMemory(Value& v);
+
+// DOOM specific
+private:
+     void FindPlayerStructAddress();
+    void AddValuesToFreeze();
 
 private:
     CheatEngine();
@@ -48,8 +55,8 @@ private:
     std::thread freezeThread;
     // to agregate date
     std::list<unsigned long> addresesWithMatchingValue;
-    std::list<unsigned long> valuesToFreeze;
-    std::list<sector> sectorsToScan;
+    std::list<Value> valuesToFreeze;
+    std::list<Sector> sectorsToScan;
     // search
     long value = 0;
     unsigned long matches;

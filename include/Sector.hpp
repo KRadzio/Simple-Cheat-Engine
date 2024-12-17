@@ -3,7 +3,7 @@
 
 #define BUFF_SIZE 128
 
-struct sector
+struct Sector
 {
     unsigned long start;
     unsigned long end;

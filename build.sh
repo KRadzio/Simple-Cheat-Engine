@@ -1,1 +1,1 @@
-g++ ./src/*.cpp  -I ./include -o ./bin/proj -Wall -lpthread
+g++ ./src/*.cpp -I ./include -o ./bin/proj -Wall -lpthread
