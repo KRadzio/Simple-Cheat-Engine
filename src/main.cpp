@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/ptrace.h>
 #include <sys/types.h>
 #include <dirent.h>
