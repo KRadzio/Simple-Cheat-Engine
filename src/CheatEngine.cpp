@@ -29,14 +29,14 @@ void CheatEngine::MainLoop()
     AddUsefulSectors();
 
     std::cout << "Insert health value\n";
-    std::cin >> value;
+    std::cin >> valueToFind;
 
     ScanForValue();
 
     std::cout << "Found: " << matches << " matches\n";
 
     std::cout << "Enter health value again after it changes\n";
-    std::cin >> value;
+    std::cin >> valueToFind;
     Rescan();
 
     FindPlayerStructAddress();
@@ -45,10 +45,14 @@ void CheatEngine::MainLoop()
 
     freezeThread = std::thread(&CheatEngine::FreezeValues, this);
 
-    printf("enter any key to stop\n");
+    char opt = 0;
+    getchar();
 
-    getchar();
-    getchar();
+    while (opt != 'q')
+    {
+        printf("enter q to stop\n");
+        opt = getchar();
+    }
 
     mutex.lock();
     run = false;
@@ -90,11 +94,11 @@ void CheatEngine::ScanForValue()
 
     // the value is unsigned and can be stored on diffrent amount of bytes
     int stepSize = 0;
-    if (value <= 127 && value >= -128) // 255 one byte
+    if (valueToFind <= 127 && valueToFind >= -128) // 255 one byte
         stepSize = 1;
-    else if (value <= 32767 && value >= -32768) // 65535 // two bytes
+    else if (valueToFind <= 32767 && valueToFind >= -32768) // 65535 // two bytes
         stepSize = 2;
-    else if (value <= 2147483647 && value >= -2147483648) // 4294967295 // four bytes
+    else if (valueToFind <= 2147483647 && valueToFind >= -2147483648) // 4294967295 // four bytes
         stepSize = 4;
     else // eight bytes
         stepSize = 8;
@@ -122,7 +126,7 @@ void CheatEngine::ScanForValue()
                 }
                 if ((i + j) % 2 == 1)
                     oneByte = ptrace(PTRACE_PEEKDATA, pid, i + j, 0);
-                if (eightBytes == value || fourBytes == value || twoBytes == value || oneByte == value)
+                if (eightBytes == valueToFind || fourBytes == valueToFind || twoBytes == valueToFind || oneByte == valueToFind)
                 {
                     addresesWithMatchingValue.emplace_front(i + j);
                     matches++;
@@ -166,7 +170,7 @@ void CheatEngine::Rescan()
         }
         if ((*i) % 2 == 1)
             oneByte = ptrace(PTRACE_PEEKDATA, pid, *i, 0);
-        if (eightBytes == value || fourBytes == value || twoBytes == value || oneByte == value)
+        if (eightBytes == valueToFind || fourBytes == valueToFind || twoBytes == valueToFind || oneByte == valueToFind)
         {
             printf("%lx\n", *i);
             i++;
@@ -197,11 +201,22 @@ void CheatEngine::FreezeValues()
         ptrace(PTRACE_INTERRUPT, pid, NULL, NULL);
         waitpid(pid, &status, 0);
         mutex.lock();
+        if (procName == DOOM)
+        {
+            unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
+            // the player either restarted the map or changed map or loaded a save
+            if (mobjPtr != valuesToFreeze.begin()->address)
+            {
+                valuesToFreeze.begin()->address = mobjPtr + 196;
+                AddFullArsenal();
+            }
+        }
         for (auto v : valuesToFreeze)
             WriteValueBackToMemory(v);
         mutex.unlock();
         ptrace(PTRACE_CONT, pid, NULL, NULL);
-        sleep(1);
+        // sleep fore half a second to not update to often
+        usleep(500000);
         mutex.lock();
         if (!run)
             runL = 0;
@@ -239,12 +254,24 @@ void CheatEngine::FindPlayerStructAddress()
             break;
         }
     }
-
     // the player struct in DOOM starts 44 bytes before the health value
     playerStructAddress = address - 44;
+    AddFullArsenal();
     AddValuesToFreeze();
     ptrace(PT_DETACH, pid, NULL, NULL);
     addresesWithMatchingValue.clear();
+}
+
+void CheatEngine::AddFullArsenal()
+{
+    Value v;
+    v.size = 4;
+    v.value = 1;
+    for (int i = 0; i < 9; i++)
+    {
+        v.address = playerStructAddress + 204 + i * 4;
+        WriteValueBackToMemory(v);
+    }
 }
 
 void CheatEngine::AddValuesToFreeze()
@@ -254,12 +281,12 @@ void CheatEngine::AddValuesToFreeze()
     Value v;
     unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
     v.address = mobjPtr + 196;
-    v.value = 800;
+    v.value = 200;
     v.size = 4;
     valuesToFreeze.push_back(v);
     // player health
     v.address = playerStructAddress + 44;
-    v.value = 800;
+    v.value = 200;
     v.size = 4;
     valuesToFreeze.push_back(v);
     // player armor
@@ -272,7 +299,22 @@ void CheatEngine::AddValuesToFreeze()
     v.value = 2;
     v.size = 4;
     valuesToFreeze.push_back(v);
-    //  ammo
+    // bullet ammo
+    v.address = playerStructAddress + 240;
+    v.value = 400;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
+    // shell ammo
+    v.address = playerStructAddress + 244;
+    v.value = 100;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
+    // plasma ammo
+    v.address = playerStructAddress + 248;
+    v.value = 600;
+    v.size = 4;
+    valuesToFreeze.push_back(v);
+    // rocket ammo
     v.address = playerStructAddress + 252;
     v.value = 100;
     v.size = 4;

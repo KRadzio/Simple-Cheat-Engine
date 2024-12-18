@@ -42,7 +42,8 @@ private:
 
 // DOOM specific
 private:
-     void FindPlayerStructAddress();
+    void FindPlayerStructAddress();
+    void AddFullArsenal();
     void AddValuesToFreeze();
 
 private:
@@ -58,7 +59,7 @@ private:
     std::list<Value> valuesToFreeze;
     std::list<Sector> sectorsToScan;
     // search
-    long value = 0;
+    long valueToFind = 0;
     unsigned long matches;
     unsigned long playerStructAddress = 0; // cheats for DOOM (the player struct is known so we can calculate the offsets from its start)
     unsigned int pid = 0;
