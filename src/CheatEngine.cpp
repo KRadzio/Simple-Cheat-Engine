@@ -154,7 +154,7 @@ void CheatEngine::DisplayMatches()
             printf(" In code sector ");
         else
             printf(" In data sector ");
-        printf("size in bytes: %c\n", m.size);
+        printf("size in bytes: %d\n", m.size);
     }
 }
 
@@ -162,7 +162,7 @@ void CheatEngine::DisplayValuesToFreeze()
 {
     mutex.lock();
     for (auto vf : valuesToFreeze)
-        printf("Addres: %lx value frozen: %ld size in bytes: %c\n", vf.address, vf.value, vf.size);
+        printf("Addres: %lx value frozen: %ld size in bytes: %d\n", vf.address, vf.value, vf.size);
     mutex.unlock();
 }
 
@@ -216,7 +216,7 @@ void CheatEngine::DisplayMemoryUnderAddress()
         {
             currByte = bytesRead;
             bytesRead = bytesRead >> 8;
-            printf(" %c ", currByte);
+            printf(" %dx ", currByte);
         }
         printf("\n");
     }
@@ -597,7 +597,6 @@ void CheatEngine::FindPlayerStructAddress()
     }
     else
         printf("Can not find player\n");
-    addresesWithMatchingValue.clear();
 }
 
 void CheatEngine::AddFullArsenal()
