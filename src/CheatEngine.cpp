@@ -11,82 +11,277 @@ CheatEngine &CheatEngine::GetInstance()
 
 void CheatEngine::MainLoop()
 {
-    Value v;
-    v.address = 1000;
-    v.size = 2;
-    v.value = 5;
-    WriteValueBackToMemory(v);
-    std::cout << "Enter pid \n";
-    std::cin >> pid;
-    filepath = "/proc/" + std::to_string(pid) + "/exe";
-    char tmp[MAX_PATH_LENGTH];
-    int length = readlink(filepath.c_str(), tmp, MAX_PATH_LENGTH - 1);
-    tmp[length] = '\0';
-    procName = tmp;
-    std::cout << procName << std::endl;
-
-    filepath = "/proc/" + std::to_string(pid) + "/maps";
-    AddUsefulSectors();
-
-    std::cout << "Insert health value\n";
-    std::cin >> valueToFind;
-
-    ScanForValue();
-
-    std::cout << "Found: " << matches << " matches\n";
-
-    std::cout << "Enter health value again after it changes\n";
-    std::cin >> valueToFind;
-    Rescan();
-
-    FindPlayerStructAddress();
-
-    printf("%lx \n", playerStructAddress);
-
-    freezeThread = std::thread(&CheatEngine::FreezeValues, this);
-
-    char opt = 0;
-    getchar();
-
+    printf("Welcome to simple cheat engine \n\n");
+    // print info
+    Help();
+    printf("Simple Cheat Engine Prompt>");
+    char opt;
     while (opt != 'q')
     {
-        printf("enter q to stop\n");
-        opt = getchar();
+        std::cin >> opt;
+        switch (opt)
+        {
+        case 'h':
+            Help();
+            break;
+        case 'p':
+            ChangePid();
+            break;
+        case 'v':
+            DisplaySectorsToScan();
+            break;
+        case 's':
+            ScanForValue();
+            break;
+        case 'a':
+            Rescan();
+            break;
+        case 'l':
+            DisplayMatches();
+            break;
+        case 'd':
+            DisplayMemoryUnderAddress();
+            break;
+        case 'w':
+            WriteToAddres();
+            break;
+        case 'f':
+            AddNewValueToFreeze();
+            break;
+        case 'j':
+            DisplayValuesToFreeze();
+            break;
+        case 'c':
+            if (!freezeThread.joinable())
+            {
+                runFreezing = true;
+                freezeThread = std::thread(&CheatEngine::FreezeValues, this);
+            }
+            else
+                printf("Freezing alredy running\n");
+            break;
+        case 'e':
+            StopFreezeThread();
+            break;
+        case 'u':
+            RemoveValueToFreeze();
+            break;
+        case 'k':
+            StopFreezeThread();
+            valuesToFreeze.clear();
+            break;
+        case 'n':
+            system("clear");
+            break;
+        case 'b':
+            if (procName == DOOM)
+            {
+                FindPlayerStructAddress();
+                freezeThread = std::thread(&CheatEngine::FreezeValues, this);
+            }
+            else
+                printf("This option can not be used on other games\n");
+            break;
+        default:
+            printf("Simple Cheat Engine Prompt>");
+            break;
+        }
+        printf("\n");
     }
-
-    mutex.lock();
-    run = false;
-    mutex.unlock();
-
-    if (freezeThread.joinable())
-        freezeThread.join();
+    // the user may not have stoped it
+    StopFreezeThread();
     valuesToFreeze.clear();
 }
 
-void CheatEngine::AddUsefulSectors()
+void CheatEngine::ChangePid()
 {
-    char *line = NULL;
-    size_t len = 0;
-    FILE *mapFile = fopen(filepath.c_str(), "r");
-    struct Sector s;
-
-    while (getline(&line, &len, mapFile) != -1)
+    printf("Enter new pid\n");
+    unsigned int tmp;
+    std::cin >> tmp;
+    if (tmp == 0)
     {
-        sscanf(line, "%lx-%lx %c%c%c%c %x %x:%x %d %s", &s.start, &s.end, &s.readAcces, &s.writeAcces,
-               &s.exeAcces, &s.protectedA, &s.offset, &s.devMajor, &s.devMinor, &s.incode, s.name);
+        printf("Pid can not be zero, the previous pid is not changed\n");
+        return;
+    }
+    pid = tmp;
+    ResetEverything();
+    AddNewFilePaths();
+    AddUsefulSectors();
+    printf("\nNew pid set: %u\n", pid);
+    printf("Determined which sectors to scann\n");
+}
 
-        if (strcmp(s.name, procName.c_str()) == 0)
+void CheatEngine::Help()
+{
+    // help menu
+    printf("IMPORTANT: THIS INFO CAN BE DISPLAYED AFTER CHOOSING THE 'Help' OPTION\n");
+    printf("h) Help\n");
+    printf("p) Change pid\n");
+    printf("v) Display sectors which will be scanned\n");
+    printf("s) Scan for value\n");
+    printf("a) Scan again\n");
+    printf("l) List matches\n");
+    printf("d) Print memory under address\n");
+    printf("w) Write to memory address\n");
+    printf("f) Add a value to freeze\n");
+    printf("j) List values to freeze\n");
+    printf("c) Continue the freezing\n");
+    printf("e) Stop freezing\n");
+    printf("u) Remove a value to freeze\n");
+    printf("k) Clear all values to freeze and stop freezing\n");
+    printf("n) Clear screen\n");
+    printf("q) Quit\n");
+    printf("WARNING: FREEZING VALUES WILL BE STOPED AFTER SCANNING OR READING/WRITING TO MEMORY\n");
+    printf("If the game is Classic DOOM the following option is available\n");
+    printf("b) Find player struct addres and auto add values to freeze\n");
+    printf("NOTE: Finding the player struct addres should be done when ther is x < 10 matches\n");
+    printf("NOTE: The player struct is found by inserting PLAYER HEALTH VALUE\n");
+}
+
+void CheatEngine::ResetSearch()
+{
+    matches = 0;
+    valueToFind = 0;
+    if (procName == DOOM)
+        playerStructAddress = 0;
+    addresesWithMatchingValue.clear();
+}
+
+void CheatEngine::DisplayMatches()
+{
+    for (auto m : addresesWithMatchingValue)
+    {
+        printf("Addres: %lx", m.address);
+        if (m.type == EXECUTABLE)
+            printf(" In code sector ");
+        else
+            printf(" In data sector ");
+        printf("size in bytes: %c\n", m.size);
+    }
+}
+
+void CheatEngine::DisplayValuesToFreeze()
+{
+    mutex.lock();
+    for (auto vf : valuesToFreeze)
+        printf("Addres: %lx value frozen: %l size in bytes: %c\n", vf.address, vf.value, vf.size);
+    mutex.unlock();
+}
+
+void CheatEngine::DisplaySectorsToScan()
+{
+    printf("Form left to right) Start: End: Flags: Offset: DevMajor: DevMinor: Incode: Name of the file:\n");
+    for (auto s : sectorsToScan)
+    {
+        printf("%lx-%lx %c%c%c%c %x %x:%x %d %s", s.start, s.end, s.readAcces, s.writeAcces,
+               s.exeAcces, s.protectedA, s.offset, s.devMajor, s.devMinor, s.incode, s.name);
+        if (s.exeAcces == 'x')
+            printf(" (code sector)\n");
+        else
+            printf(" (data sector)\n");
+    }
+}
+
+void CheatEngine::DisplayMemoryUnderAddress()
+{
+    if (pid == 0)
+    {
+        printf("Cannot read the engine is not attached to a process\n");
+        return;
+    }
+    if (freezeThread.joinable())
+    {
+        StopFreezeThread();
+        printf("Freezing stoped to read memory\n");
+    }
+
+    printf("Enter address (IN HEX), and number of bytes ahead of the addres to display\n");
+    unsigned long address;
+    unsigned long numberOfBytes;
+    std::cin >> std::hex >> address >> std::dec;
+    std::cin >> numberOfBytes;
+}
+
+void CheatEngine::WriteToAddres()
+{
+    if (pid == 0)
+    {
+        printf("Cannot write the engine is not attached to a process\n");
+        return;
+    }
+    if (freezeThread.joinable())
+    {
+        StopFreezeThread();
+        printf("Freezing stoped to write a value to memory\n");
+    }
+
+    Value v;
+    printf("Insert address to write in (IN HEX), value to be written and size in bytes. In that order\n");
+    std::cin >> std::hex >> v.address >> std::dec;
+    std::cin >> v.value;
+    std::cin >> v.size;
+
+    ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    WriteValueBackToMemory(v);
+    ptrace(PTRACE_DETACH, pid, NULL, NULL);
+}
+
+void CheatEngine::AddNewValueToFreeze()
+{
+    Value v;
+    printf("Insert address (IN HEX), value at which the variable will be frozen and size in bytes. In that order\n");
+    std::cin >> std::hex >> v.address >> std::dec;
+    std::cin >> v.value;
+    std::cin >> v.size;
+    mutex.lock();
+    for (auto vf : valuesToFreeze)
+    {
+        if (v.address == vf.address)
         {
-            sectorsToScan.push_back(s);
-            printf("%lx-%lx %c%c%c%c %x %x:%x %d %s \n", s.start, s.end, s.readAcces, s.writeAcces,
-                   s.exeAcces, s.protectedA, s.offset, s.devMajor, s.devMinor, s.incode, s.name);
+            vf.size = v.size;
+            vf.value = v.value;
+            break;
         }
     }
-    fclose(mapFile);
+    // not in the list
+    valuesToFreeze.push_back(v);
+    mutex.unlock();
+}
+
+void CheatEngine::RemoveValueToFreeze()
+{
+    printf("Insert the value address\n");
+    unsigned long address;
+    std::cin >> address;
+    mutex.lock();
+    auto i = valuesToFreeze.begin();
+    while (i != valuesToFreeze.end())
+    {
+        if (i->address == address)
+            i = valuesToFreeze.erase(i);
+        else
+            i++;
+    }
+    mutex.unlock();
 }
 
 void CheatEngine::ScanForValue()
 {
+    if (sectorsToScan.empty())
+    {
+        printf("Can not scann the list is empty\n");
+        return;
+    }
+    if (freezeThread.joinable())
+    {
+        StopFreezeThread();
+        printf("Freezeing stoped in order to scan for new value\n");
+    }
+    ResetSearch();
+
+    printf("Insert value to search\n");
+    std::cin >> valueToFind;
+
     ptrace(PT_ATTACH, pid, NULL, NULL);
     int status;
     // wait for the process to stop
@@ -110,7 +305,13 @@ void CheatEngine::ScanForValue()
 
     for (auto s : sectorsToScan)
     {
-        printf("%lx %lx\n", s.start, s.end);
+        printf("Scanning: %lx-%lx", s.start, s.end);
+
+        if (s.exeAcces == 'x')
+            printf(" (code sector) ");
+        else
+            printf(" (data sector) ");
+
         for (unsigned long i = s.start; i < s.end; i += sizeof(long))
         {
             for (unsigned long j = 0; j < sizeof(long); j += stepSize)
@@ -128,7 +329,21 @@ void CheatEngine::ScanForValue()
                     oneByte = ptrace(PTRACE_PEEKDATA, pid, i + j, 0);
                 if (eightBytes == valueToFind || fourBytes == valueToFind || twoBytes == valueToFind || oneByte == valueToFind)
                 {
-                    addresesWithMatchingValue.emplace_front(i + j);
+                    Match m;
+                    if (oneByte == valueToFind)
+                        m.size = 1;
+                    else if (twoBytes == valueToFind)
+                        m.size = 2;
+                    else if (fourBytes == valueToFind)
+                        m.size = 4;
+                    else
+                        m.size = 8;
+                    m.address = i + j;
+                    if (s.exeAcces == 'x')
+                        m.type = EXECUTABLE;
+                    else
+                        m.type = NOT_EXECUTABLE;
+                    addresesWithMatchingValue.emplace_front(m);
                     matches++;
                 }
                 oneByte = 0;
@@ -137,12 +352,29 @@ void CheatEngine::ScanForValue()
                 eightBytes = 0;
             }
         }
+        printf(" DONE\n");
     }
     ptrace(PT_DETACH, pid, NULL, NULL);
+    printf("Found %lu matches\n", matches);
 }
 
 void CheatEngine::Rescan()
 {
+
+    if (sectorsToScan.empty())
+    {
+        printf("Can not scann the list is empty\n");
+        return;
+    }
+    if (freezeThread.joinable())
+    {
+        StopFreezeThread();
+        printf("Freezeing stoped in order to scan for value\n");
+    }
+
+    printf("Enter value again after it changes\n");
+    std::cin >> valueToFind;
+
     int status;
 
     ptrace(PT_ATTACH, pid, NULL, NULL);
@@ -159,20 +391,19 @@ void CheatEngine::Rescan()
     {
         // the value is unsigned and can be stored on diffrent amount of bytes
         // this time the number of bytes can be determined by the addres the value is at
-        if ((*i) % 8 == 0)
-            eightBytes = ptrace(PTRACE_PEEKDATA, pid, *i, 0);
-        if ((*i) % 4 == 0)
-            fourBytes = ptrace(PTRACE_PEEKDATA, pid, *i, 0);
-        if ((*i) % 2 == 0)
+        if ((i->address) % 8 == 0)
+            eightBytes = ptrace(PTRACE_PEEKDATA, pid, i->address, 0);
+        if ((i->address) % 4 == 0)
+            fourBytes = ptrace(PTRACE_PEEKDATA, pid, i->address, 0);
+        if ((i->address) % 2 == 0)
         {
-            twoBytes = ptrace(PTRACE_PEEKDATA, pid, *i, 0);
-            oneByte = ptrace(PTRACE_PEEKDATA, pid, *i, 0);
+            twoBytes = ptrace(PTRACE_PEEKDATA, pid, i->address, 0);
+            oneByte = ptrace(PTRACE_PEEKDATA, pid, i->address, 0);
         }
-        if ((*i) % 2 == 1)
-            oneByte = ptrace(PTRACE_PEEKDATA, pid, *i, 0);
+        if ((i->address) % 2 == 1)
+            oneByte = ptrace(PTRACE_PEEKDATA, pid, i->address, 0);
         if (eightBytes == valueToFind || fourBytes == valueToFind || twoBytes == valueToFind || oneByte == valueToFind)
         {
-            printf("%lx\n", *i);
             i++;
             matches++;
         }
@@ -184,6 +415,52 @@ void CheatEngine::Rescan()
         eightBytes = 0;
     }
     ptrace(PT_DETACH, pid, NULL, NULL);
+    printf("%lu matches after rescan\n", matches);
+}
+
+void CheatEngine::AddUsefulSectors()
+{
+    char *line = NULL;
+    size_t len = 0;
+    FILE *mapFile = fopen(filepath.c_str(), "r");
+
+    if (mapFile == NULL && errno == ENOENT)
+    {
+        printf("Process with pid: %u does not exist\n", pid);
+        return;
+    }
+    struct Sector s;
+
+    while (getline(&line, &len, mapFile) != -1)
+    {
+        sscanf(line, "%lx-%lx %c%c%c%c %x %x:%x %d %s", &s.start, &s.end, &s.readAcces, &s.writeAcces,
+               &s.exeAcces, &s.protectedA, &s.offset, &s.devMajor, &s.devMinor, &s.incode, s.name);
+
+        if (strcmp(s.name, procName.c_str()) == 0)
+        {
+            sectorsToScan.push_back(s);
+            printf("%lx-%lx %c%c%c%c %x %x:%x %d %s WILL BE SCANED", s.start, s.end, s.readAcces, s.writeAcces,
+                   s.exeAcces, s.protectedA, s.offset, s.devMajor, s.devMinor, s.incode, s.name);
+            if (s.exeAcces == 'x')
+                printf(" (code sector)\n");
+            else
+                printf(" (data sector)\n");
+        }
+        else
+            printf("%lx-%lx %c%c%c%c %x %x:%x %d %s WILL NOT BE SCANED\n", s.start, s.end, s.readAcces, s.writeAcces,
+                   s.exeAcces, s.protectedA, s.offset, s.devMajor, s.devMinor, s.incode, s.name);
+    }
+    fclose(mapFile);
+}
+
+void CheatEngine::StopFreezeThread()
+{
+    mutex.lock();
+    runFreezing = false;
+    mutex.unlock();
+
+    if (freezeThread.joinable())
+        freezeThread.join();
 }
 
 void CheatEngine::FreezeValues()
@@ -205,10 +482,13 @@ void CheatEngine::FreezeValues()
         {
             unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
             // the player either restarted the map or changed map or loaded a save
-            if (mobjPtr != valuesToFreeze.begin()->address)
+            if (!valuesToFreeze.empty())
             {
-                valuesToFreeze.begin()->address = mobjPtr + 196;
-                AddFullArsenal();
+                if (mobjPtr != valuesToFreeze.begin()->address - 196)
+                {
+                    valuesToFreeze.begin()->address = mobjPtr + 196;
+                    AddFullArsenal();
+                }
             }
         }
         for (auto v : valuesToFreeze)
@@ -218,7 +498,7 @@ void CheatEngine::FreezeValues()
         // sleep fore half a second to not update to often
         usleep(500000);
         mutex.lock();
-        if (!run)
+        if (!runFreezing)
             runL = 0;
         mutex.unlock();
     }
@@ -238,6 +518,11 @@ void CheatEngine::WriteValueBackToMemory(Value &v)
 
 void CheatEngine::FindPlayerStructAddress()
 {
+    if (freezeThread.joinable())
+    {
+        StopFreezeThread();
+        printf("Freezeing stoped in order to search for player struct\n");
+    }
     unsigned long address = 0;
     int status;
     ptrace(PT_ATTACH, pid, NULL, NULL);
@@ -245,20 +530,26 @@ void CheatEngine::FindPlayerStructAddress()
     // search relative to health pos
     for (auto i : addresesWithMatchingValue)
     {
-        int ammo1 = ptrace(PTRACE_PEEKDATA, pid, i + 220, 0);
-        int ammo2 = ptrace(PTRACE_PEEKDATA, pid, i + 224, 0);
+        int ammo1 = ptrace(PTRACE_PEEKDATA, pid, i.address + 220, 0);
+        int ammo2 = ptrace(PTRACE_PEEKDATA, pid, i.address + 224, 0);
         // the player may have backpack
         if ((ammo1 == 200 && ammo2 == 50) || (ammo1 == 400 && ammo2 == 100))
         {
-            address = i;
+            address = i.address;
             break;
         }
     }
-    // the player struct in DOOM starts 44 bytes before the health value
-    playerStructAddress = address - 44;
-    AddFullArsenal();
-    AddValuesToFreeze();
-    ptrace(PT_DETACH, pid, NULL, NULL);
+    if (address != 0)
+    {
+        // the player struct in DOOM starts 44 bytes before the health value
+        playerStructAddress = address - 44;
+        printf("Player struct address found: %lx \n", playerStructAddress);
+        AddFullArsenal();
+        AddPlayerValuesToFreeze();
+        ptrace(PT_DETACH, pid, NULL, NULL);
+    }
+    else
+        printf("Can not find player\n");
     addresesWithMatchingValue.clear();
 }
 
@@ -272,10 +563,12 @@ void CheatEngine::AddFullArsenal()
         v.address = playerStructAddress + 204 + i * 4;
         WriteValueBackToMemory(v);
     }
+    printf("Added all weapons\n");
 }
 
-void CheatEngine::AddValuesToFreeze()
+void CheatEngine::AddPlayerValuesToFreeze()
 {
+    mutex.lock();
     // relative to the begining of the struct
     // mobj
     Value v;
@@ -319,4 +612,35 @@ void CheatEngine::AddValuesToFreeze()
     v.value = 100;
     v.size = 4;
     valuesToFreeze.push_back(v);
+    mutex.unlock();
+    printf("Added player health, armor and ammo to freeze list\n");
+}
+
+void CheatEngine::ResetEverything()
+{
+    StopFreezeThread();
+    addresesWithMatchingValue.clear();
+    valuesToFreeze.clear();
+    sectorsToScan.clear();
+    valueToFind = 0;
+    matches = 0;
+    playerStructAddress = 0;
+    filepath = "";
+    procName = "";
+    runFreezing = true;
+}
+
+void CheatEngine::AddNewFilePaths()
+{
+    filepath = "/proc/" + std::to_string(pid) + "/exe";
+    char tmp[MAX_PATH_LENGTH];
+    int length = readlink(filepath.c_str(), tmp, MAX_PATH_LENGTH - 1);
+    tmp[length] = '\0';
+    procName = tmp;
+    printf("New proces name: %s \n", procName.c_str());
+    filepath = "/proc/" + std::to_string(pid) + "/maps";
+}
+
+bool CheatEngine::IsTheProcessRunning(unsigned int pid)
+{
 }
