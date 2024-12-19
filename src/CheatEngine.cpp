@@ -299,6 +299,7 @@ void CheatEngine::ScanForValue()
         printf("Can not scan the list is empty\n");
         return;
     }
+
     if (!IsTheProcessRunning(pid))
     {
         printf("The process has ended can not scan\n");
@@ -691,6 +692,8 @@ bool CheatEngine::IsTheProcessRunning(unsigned int pid)
 {
     std::string path = "/proc/" + std::to_string(pid) + "/status";
     FILE *file = fopen(path.c_str(), "r");
+    if(file == NULL && errno == ENOENT)
+        return false;
     char *line = NULL;
     char status;
     unsigned long len;
