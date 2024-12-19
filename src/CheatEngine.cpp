@@ -210,7 +210,12 @@ void CheatEngine::DisplayMemoryUnderAddress()
     std::cin >> numberOfBytes;
     uint8_t currByte;
 
-    ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    long ret = ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    if (ret == -1)
+    {
+        printf("Could not attach to %u\n", pid);
+        return;
+    }
     int status;
     // wait for the process to stop
     waitpid(pid, &status, 0);
@@ -222,7 +227,10 @@ void CheatEngine::DisplayMemoryUnderAddress()
         {
             currByte = bytesRead;
             bytesRead = bytesRead >> 8;
-            printf(" %x ", currByte);
+            if (currByte < 0x10)
+                printf(" 0%x ", currByte);
+            else
+                printf(" %x ", currByte);
         }
         printf("\n");
     }
@@ -254,7 +262,12 @@ void CheatEngine::WriteToAddress()
     std::cin >> v.value;
     std::cin >> v.size;
 
-    ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    long ret = ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    if (ret == -1)
+    {
+        printf("Could not attach to %u\n", pid);
+        return;
+    }
     int status;
     // wait for the process to stop
     waitpid(pid, &status, 0);
@@ -334,7 +347,12 @@ void CheatEngine::ScanForValue()
     printf("Insert value to search\n");
     std::cin >> valueToFind;
 
-    ptrace(PT_ATTACH, pid, NULL, NULL);
+    long ret = ptrace(PT_ATTACH, pid, NULL, NULL);
+    if (ret == -1)
+    {
+        printf("Could not attach to %u\n", pid);
+        return;
+    }
     int status;
     // wait for the process to stop
     waitpid(pid, &status, 0);
@@ -435,7 +453,12 @@ void CheatEngine::Rescan()
 
     int status;
 
-    ptrace(PT_ATTACH, pid, NULL, NULL);
+    long ret = ptrace(PT_ATTACH, pid, NULL, NULL);
+    if (ret == -1)
+    {
+        printf("Could not attach to %u\n", pid);
+        return;
+    }
     waitpid(pid, &status, 0);
     matches = 0;
 
@@ -528,7 +551,12 @@ void CheatEngine::FreezeValues()
     pid = this->pid;
     mutex.unlock();
 
-    ptrace(PTRACE_SEIZE, pid, NULL, NULL);
+    long ret = ptrace(PTRACE_SEIZE, pid, NULL, NULL);
+    if (ret == -1)
+    {
+        printf("\nCould not attach to %u, freezing can not be done\n", pid);
+        return;
+    }
     int status;
     int runL = 1;
     while (runL && IsTheProcessRunning(pid))
@@ -592,7 +620,12 @@ void CheatEngine::FindPlayerStructAddress()
     unsigned long address = 0;
     int status;
 
-    ptrace(PT_ATTACH, pid, NULL, NULL);
+    long ret = ptrace(PT_ATTACH, pid, NULL, NULL);
+    if (ret == -1)
+    {
+        printf("Could not attach to %u\n", pid);
+        return;
+    }
     waitpid(pid, &status, 0);
     // search relative to health pos
     for (auto i : addresesWithMatchingValue)
