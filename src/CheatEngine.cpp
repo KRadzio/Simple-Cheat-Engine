@@ -14,10 +14,10 @@ void CheatEngine::MainLoop()
     printf("Welcome to simple cheat engine \n\n");
     // print info
     Help();
-    printf("Simple Cheat Engine Prompt>");
     char opt;
     while (opt != 'q')
     {
+        printf("Simple Cheat Engine Prompt>");
         std::cin >> opt;
         switch (opt)
         {
@@ -83,10 +83,8 @@ void CheatEngine::MainLoop()
                 printf("This option can not be used on other games\n");
             break;
         default:
-            printf("Simple Cheat Engine Prompt>");
             break;
         }
-        printf("\n");
     }
     // the user may not have stoped it
     StopFreezeThread();
@@ -164,7 +162,7 @@ void CheatEngine::DisplayValuesToFreeze()
 {
     mutex.lock();
     for (auto vf : valuesToFreeze)
-        printf("Addres: %lx value frozen: %l size in bytes: %c\n", vf.address, vf.value, vf.size);
+        printf("Addres: %lx value frozen: %ld size in bytes: %c\n", vf.address, vf.value, vf.size);
     mutex.unlock();
 }
 
@@ -196,10 +194,27 @@ void CheatEngine::DisplayMemoryUnderAddress()
     }
 
     printf("Enter address (IN HEX), and number of bytes ahead of the addres to display\n");
+    printf("Memory will be rounded to eight bytes\n");
     unsigned long address;
     unsigned long numberOfBytes;
     std::cin >> std::hex >> address >> std::dec;
     std::cin >> numberOfBytes;
+    int8_t currByte;
+
+    ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    for (unsigned long i = 0; i < numberOfBytes; i += sizeof(long))
+    {
+        long bytesRead = ptrace(PTRACE_PEEKDATA, pid, address + i, NULL);
+        printf("%lx)", address + i);
+        for (unsigned long i = 0; i < sizeof(long); i++)
+        {
+            currByte = bytesRead;
+            bytesRead = bytesRead >> 8;
+            printf(" %c ", currByte);
+        }
+        printf("\n");
+    }
+    ptrace(PTRACE_DETACH, pid, NULL, NULL);
 }
 
 void CheatEngine::WriteToAddres()
@@ -473,7 +488,7 @@ void CheatEngine::FreezeValues()
     ptrace(PTRACE_SEIZE, pid, NULL, NULL);
     int status;
     int runL = 1;
-    while (runL)
+    while (runL && IsTheProcessRunning(pid))
     {
         ptrace(PTRACE_INTERRUPT, pid, NULL, NULL);
         waitpid(pid, &status, 0);
@@ -503,6 +518,8 @@ void CheatEngine::FreezeValues()
         mutex.unlock();
     }
     ptrace(PT_DETACH, pid, NULL, NULL);
+    if (!IsTheProcessRunning(pid))
+        printf("Freezing stoped becouse the process finished\n");
 }
 
 void CheatEngine::WriteValueBackToMemory(Value &v)
@@ -643,4 +660,23 @@ void CheatEngine::AddNewFilePaths()
 
 bool CheatEngine::IsTheProcessRunning(unsigned int pid)
 {
+    std::string path = "/proc/" + std::to_string(pid) + "/status";
+    FILE *file = fopen(path.c_str(), "r");
+    char *line = NULL;
+    char status;
+    unsigned long len;
+
+    while (getline(&line, &len, file) != -1)
+    {
+        if (strncmp(line, "State:\t", sizeof("State:\t") - 1) == 0)
+        {
+            status = line[sizeof("State:\t") - 1];
+            break;
+        }
+    }
+    fclose(file);
+    if (status == 'Z' || status == 'X')
+        return false;
+    else
+        return true;
 }
