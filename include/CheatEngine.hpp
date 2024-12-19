@@ -27,6 +27,7 @@
 #define DOOM "/usr/bin/dsda-doom"
 #define MAX_PATH_LENGTH 128
 #define BUFF_SIZE 128
+#define DEFAUL_INTERVAL 500 // in milisesounds
 
 
 class CheatEngine
@@ -44,7 +45,8 @@ private:
     void DisplayValuesToFreeze();
     void DisplaySectorsToScan();
     void DisplayMemoryUnderAddress();
-    void WriteToAddres();
+    void WriteToAddress();
+    void SetInterval();
     void AddNewValueToFreeze();
     void RemoveValueToFreeze();
     void ScanForValue();
@@ -81,6 +83,7 @@ private:
     unsigned long playerStructAddress = 0; // used in cheats for DOOM (the player struct is known so we can calculate the offsets from its start)
     unsigned int pid = 0;
     // other
+    int interval = DEFAUL_INTERVAL * 1000;
     bool runMainLoop = true;
     bool runFreezing = true;
     std::string filepath = "";

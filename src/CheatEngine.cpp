@@ -43,7 +43,10 @@ void CheatEngine::MainLoop()
             DisplayMemoryUnderAddress();
             break;
         case 'w':
-            WriteToAddres();
+            WriteToAddress();
+            break;
+        case 'i':
+            SetInterval();
             break;
         case 'f':
             AddNewValueToFreeze();
@@ -122,6 +125,7 @@ void CheatEngine::Help()
     printf("l) List matches\n");
     printf("d) Print memory under address\n");
     printf("w) Write to memory address\n");
+    printf("i) Change interval between freezing\n");
     printf("f) Add a value to freeze\n");
     printf("j) List values to freeze\n");
     printf("c) Continue the freezing\n");
@@ -148,7 +152,7 @@ void CheatEngine::DisplayMatches()
 {
     for (auto m : addresesWithMatchingValue)
     {
-        printf("Addres: %lx", m.address);
+        printf("Address: %lx", m.address);
         if (m.type == EXECUTABLE)
             printf(" In code sector ");
         else
@@ -161,7 +165,7 @@ void CheatEngine::DisplayValuesToFreeze()
 {
     mutex.lock();
     for (auto vf : valuesToFreeze)
-        printf("Addres: %lx value frozen: %ld size in bytes: %d\n", vf.address, vf.value, vf.size);
+        printf("Address: %lx value frozen: %ld size in bytes: %d\n", vf.address, vf.value, vf.size);
     mutex.unlock();
 }
 
@@ -204,9 +208,12 @@ void CheatEngine::DisplayMemoryUnderAddress()
     unsigned long numberOfBytes;
     std::cin >> std::hex >> address >> std::dec;
     std::cin >> numberOfBytes;
-    int8_t currByte;
+    uint8_t currByte;
 
     ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    int status;
+    // wait for the process to stop
+    waitpid(pid, &status, 0);
     for (unsigned long i = 0; i < numberOfBytes; i += sizeof(long))
     {
         long bytesRead = ptrace(PTRACE_PEEKDATA, pid, address + i, NULL);
@@ -215,14 +222,14 @@ void CheatEngine::DisplayMemoryUnderAddress()
         {
             currByte = bytesRead;
             bytesRead = bytesRead >> 8;
-            printf(" %ux ", currByte);
+            printf(" %x ", currByte);
         }
         printf("\n");
     }
     ptrace(PTRACE_DETACH, pid, NULL, NULL);
 }
 
-void CheatEngine::WriteToAddres()
+void CheatEngine::WriteToAddress()
 {
     if (pid == 0)
     {
@@ -248,8 +255,20 @@ void CheatEngine::WriteToAddres()
     std::cin >> v.size;
 
     ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    int status;
+    // wait for the process to stop
+    waitpid(pid, &status, 0);
     WriteValueBackToMemory(v);
     ptrace(PTRACE_DETACH, pid, NULL, NULL);
+}
+
+void CheatEngine::SetInterval()
+{
+    printf("Enter new interval (IN MILISECOUND)\n");
+    mutex.lock();
+    std::cin >> interval;
+    interval *= 1000; // convert to microsecounds
+    mutex.unlock();
 }
 
 void CheatEngine::AddNewValueToFreeze()
@@ -534,16 +553,17 @@ void CheatEngine::FreezeValues()
             WriteValueBackToMemory(v);
         mutex.unlock();
         ptrace(PTRACE_CONT, pid, NULL, NULL);
-        // sleep fore half a second to not update to often
-        usleep(500000);
+
         mutex.lock();
+        // sleep fore half a second to not update to often
+        usleep(interval);
         if (!runFreezing)
             runL = 0;
         mutex.unlock();
     }
     ptrace(PT_DETACH, pid, NULL, NULL);
     if (!IsTheProcessRunning(pid))
-        printf("Freezing stoped becouse the process finished\n");
+        printf("\nFreezing stoped becouse the process finished\n");
 }
 
 void CheatEngine::WriteValueBackToMemory(Value &v)
