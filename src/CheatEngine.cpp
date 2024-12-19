@@ -77,6 +77,7 @@ void CheatEngine::MainLoop()
             if (procName == DOOM)
             {
                 FindPlayerStructAddress();
+                runFreezing = true;
                 freezeThread = std::thread(&CheatEngine::FreezeValues, this);
             }
             else
@@ -216,7 +217,7 @@ void CheatEngine::DisplayMemoryUnderAddress()
         {
             currByte = bytesRead;
             bytesRead = bytesRead >> 8;
-            printf(" %dx ", currByte);
+            printf(" %ux ", currByte);
         }
         printf("\n");
     }
@@ -277,9 +278,9 @@ void CheatEngine::AddNewValueToFreeze()
 
 void CheatEngine::RemoveValueToFreeze()
 {
-    printf("Insert the value address\n");
+    printf("Insert the value address (IN HEX)\n");
     unsigned long address;
-    std::cin >> address;
+    std::cin >> std::hex >> address >> std::dec;
     mutex.lock();
     auto i = valuesToFreeze.begin();
     while (i != valuesToFreeze.end())
@@ -572,6 +573,7 @@ void CheatEngine::FindPlayerStructAddress()
     }
     unsigned long address = 0;
     int status;
+
     ptrace(PT_ATTACH, pid, NULL, NULL);
     waitpid(pid, &status, 0);
     // search relative to health pos
@@ -588,6 +590,12 @@ void CheatEngine::FindPlayerStructAddress()
     }
     if (address != 0)
     {
+        // clear to avoid dupes
+        if (!valuesToFreeze.empty())
+        {
+            valuesToFreeze.clear();
+            printf("All values deleted. Inserted player specific values\n");
+        }
         // the player struct in DOOM starts 44 bytes before the health value
         playerStructAddress = address - 44;
         printf("Player struct address found: %lx \n", playerStructAddress);
@@ -691,7 +699,7 @@ bool CheatEngine::IsTheProcessRunning(unsigned int pid)
 {
     std::string path = "/proc/" + std::to_string(pid) + "/status";
     FILE *file = fopen(path.c_str(), "r");
-    if(file == NULL && errno == ENOENT)
+    if (file == NULL && errno == ENOENT)
         return false;
     char *line = NULL;
     char status;
