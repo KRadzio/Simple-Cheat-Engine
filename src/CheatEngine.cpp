@@ -141,8 +141,6 @@ void CheatEngine::ResetSearch()
 {
     matches = 0;
     valueToFind = 0;
-    if (procName == DOOM)
-        playerStructAddress = 0;
     addresesWithMatchingValue.clear();
 }
 
