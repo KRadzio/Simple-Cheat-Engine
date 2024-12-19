@@ -187,6 +187,12 @@ void CheatEngine::DisplayMemoryUnderAddress()
         printf("Cannot read the engine is not attached to a process\n");
         return;
     }
+    if (!IsTheProcessRunning(pid))
+    {
+        printf("The process has ended can not scan\n");
+        return;
+    }
+
     if (freezeThread.joinable())
     {
         StopFreezeThread();
@@ -222,6 +228,12 @@ void CheatEngine::WriteToAddres()
     if (pid == 0)
     {
         printf("Cannot write the engine is not attached to a process\n");
+        return;
+    }
+
+    if (!IsTheProcessRunning(pid))
+    {
+        printf("The process has ended can not write\n");
         return;
     }
     if (freezeThread.joinable())
@@ -284,9 +296,15 @@ void CheatEngine::ScanForValue()
 {
     if (sectorsToScan.empty())
     {
-        printf("Can not scann the list is empty\n");
+        printf("Can not scan the list is empty\n");
         return;
     }
+    if (!IsTheProcessRunning(pid))
+    {
+        printf("The process has ended can not scan\n");
+        return;
+    }
+
     if (freezeThread.joinable())
     {
         StopFreezeThread();
@@ -378,7 +396,13 @@ void CheatEngine::Rescan()
 
     if (sectorsToScan.empty())
     {
-        printf("Can not scann the list is empty\n");
+        printf("Can not scan the list is empty\n");
+        return;
+    }
+
+    if (!IsTheProcessRunning(pid))
+    {
+        printf("The process has ended can not scan\n");
         return;
     }
     if (freezeThread.joinable())
@@ -535,6 +559,11 @@ void CheatEngine::WriteValueBackToMemory(Value &v)
 
 void CheatEngine::FindPlayerStructAddress()
 {
+    if (!IsTheProcessRunning(pid))
+    {
+        printf("The process has ended can not find player struct\n");
+        return;
+    }
     if (freezeThread.joinable())
     {
         StopFreezeThread();
