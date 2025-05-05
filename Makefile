@@ -36,7 +36,7 @@ RELASE=./bin/relase
 all: $(RELASE)
 
 $(RELASE): $(OBJECTSFILESR)
-	$(CC) $(LIBS) -o $@$(OUT) $^
+	$(CC) -o $@$(OUT) $^ $(LIBS)
 	
 $(RELASE)%.o:$(SRC)%.cpp
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -44,7 +44,7 @@ $(RELASE)%.o:$(SRC)%.cpp
 debug: $(DEBUG)
 
 $(DEBUG): $(OBJECTSFILESD)
-	$(CC) $(LIBS) $(DEBUGFLAG) -o $@$(OUT) $^
+	$(CC) $(DEBUGFLAG) -o $@$(OUT) $^ $(LIBS)
 
 $(DEBUG)%.o:$(SRC)%.cpp
 	$(CC) $(CFLAGS) $(DEBUGFLAG) -c -o $@ $<
