@@ -1,2 +1,10 @@
 .vscode/launch.json
-pytania.txt
+bin/debug/CheatEngine.d
+bin/debug/CheatEngine.o
+bin/debug/main.d
+bin/debug/main.o
+bin/relase/CheatEngine.d
+bin/relase/CheatEngine.o
+bin/relase/main.d
+bin/relase/main.o
+.vscode/settings.json
