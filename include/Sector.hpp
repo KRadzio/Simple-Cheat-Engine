@@ -11,9 +11,9 @@ struct Sector
     char writeAcces;
     char exeAcces;
     char protectedA;
-    int offset;
-    int devMajor;
-    int devMinor;
+    unsigned int offset;
+    unsigned int devMajor;
+    unsigned int devMinor;
     int incode; // zero = unused
     char name[BUFF_SIZE];
 };

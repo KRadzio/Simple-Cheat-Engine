@@ -77,14 +77,7 @@ void CheatEngine::MainLoop()
             system("clear");
             break;
         case 'b':
-            if (procName == DOOM)
-            {
-                FindPlayerStructAddress();
-                runFreezing = true;
-                freezeThread = std::thread(&CheatEngine::FreezeValues, this);
-            }
-            else
-                printf("This option can not be used on other games\n");
+            ConfirmPlaying();
             break;
         default:
             break;
@@ -135,9 +128,9 @@ void CheatEngine::Help()
     printf("n) Clear screen\n");
     printf("q) Quit\n");
     printf("WARNING: FREEZING VALUES WILL BE STOPED AFTER SCANNING OR READING/WRITING TO MEMORY\n");
-    printf("If the game is Classic DOOM the following option is available\n");
+    printf("If the game is Classic DOOM the following option could be selected to automate cheats\n");
     printf("b) Find player struct addres and auto add values to freeze\n");
-    printf("NOTE: Finding the player struct addres should be done when ther is x < 10 matches\n");
+    printf("NOTE: Finding the player struct addres should be done when there is not a lot of matches\n");
     printf("NOTE: The player struct is found by inserting PLAYER HEALTH VALUE\n");
 }
 
@@ -564,12 +557,13 @@ void CheatEngine::FreezeValues()
         ptrace(PTRACE_INTERRUPT, pid, NULL, NULL);
         waitpid(pid, &status, 0);
         mutex.lock();
-        if (procName == DOOM)
+        if (confirmedPlayingFlag)
         {
             unsigned long mobjPtr = ptrace(PTRACE_PEEKDATA, pid, playerStructAddress, 0);
             // the player either restarted the map or changed map or loaded a save
             if (!valuesToFreeze.empty())
             {
+                // there could be an issue if a value is added manualy
                 if (mobjPtr != valuesToFreeze.begin()->address - 196)
                 {
                     valuesToFreeze.begin()->address = mobjPtr + 196;
@@ -721,6 +715,27 @@ void CheatEngine::AddPlayerValuesToFreeze()
     printf("Added player health, armor and ammo to freeze list\n");
 }
 
+void CheatEngine::ConfirmPlaying()
+{
+    printf("Are you sure this is the right process? Type 'y' to confirm.\n");
+    char inp;
+    std::cin >> inp;
+    if (inp == 'y')
+    {
+        if (pid == 0)
+        {
+            printf("No process attached. Aborting\n");
+            return;
+        }
+        confirmedPlayingFlag = true;
+        FindPlayerStructAddress();
+        runFreezing = true;
+        freezeThread = std::thread(&CheatEngine::FreezeValues, this);
+    }
+    else
+        printf("Aborting\n");
+}
+
 void CheatEngine::ResetEverything()
 {
     StopFreezeThread();
@@ -733,6 +748,7 @@ void CheatEngine::ResetEverything()
     filepath = "";
     procName = "";
     runFreezing = true;
+    confirmedPlayingFlag = false;
 }
 
 void CheatEngine::AddNewFilePaths()

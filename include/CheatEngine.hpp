@@ -24,7 +24,6 @@
 #include "Value.hpp"
 #include "Match.hpp"
 
-#define DOOM "/usr/bin/dsda-doom"
 #define MAX_PATH_LENGTH 128
 #define BUFF_SIZE 128
 #define DEFAUL_INTERVAL 500 // in milisesounds
@@ -64,6 +63,7 @@ private:
     void FindPlayerStructAddress();
     void AddFullArsenal();
     void AddPlayerValuesToFreeze();
+    void ConfirmPlaying();
 
 private:
     CheatEngine();
@@ -86,6 +86,7 @@ private:
     int interval = DEFAUL_INTERVAL * 1000;
     bool runMainLoop = true;
     bool runFreezing = true;
+    bool confirmedPlayingFlag = false;
     std::string filepath = "";
     std::string procName = "";
 };
