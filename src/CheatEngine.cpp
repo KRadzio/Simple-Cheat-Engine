@@ -17,7 +17,7 @@ void CheatEngine::MainLoop()
     char opt;
     while (opt != 'q')
     {
-        printf("Simple Cheat Engine Prompt>");
+        printf(">");
         std::cin >> opt;
         switch (opt)
         {
@@ -350,7 +350,7 @@ void CheatEngine::ScanForValue()
     // wait for the process to stop
     waitpid(pid, &status, 0);
 
-    // the value is unsigned and can be stored on diffrent amount of bytes
+    // the value is unsigned and can be stored in diffrent amount of bytes
     int stepSize = 0;
     if (valueToFind <= 127 && valueToFind >= -128) // 255 one byte
         stepSize = 1;
@@ -377,19 +377,20 @@ void CheatEngine::ScanForValue()
 
         for (unsigned long i = s.start; i < s.end; i += sizeof(long))
         {
+            auto tmp = ptrace(PTRACE_PEEKDATA, pid, i, 0);
             for (unsigned long j = 0; j < sizeof(long); j += stepSize)
             {
-                if ((i + j) % 8 == 0)
-                    eightBytes = ptrace(PTRACE_PEEKDATA, pid, i + j, 0);
-                if ((i + j) % 4 == 0)
-                    fourBytes = ptrace(PTRACE_PEEKDATA, pid, i + j, 0);
-                if ((i + j) % 2 == 0)
+                if ((j) % 8 == 0)
+                    eightBytes = tmp;
+                if ((j) % 4 == 0)
+                    fourBytes = tmp;
+                if ((j) % 2 == 0)
                 {
-                    twoBytes = ptrace(PTRACE_PEEKDATA, pid, i + j, 0);
-                    oneByte = ptrace(PTRACE_PEEKDATA, pid, i + j, 0);
+                    twoBytes = tmp;
+                    oneByte = tmp;
                 }
-                if ((i + j) % 2 == 1)
-                    oneByte = ptrace(PTRACE_PEEKDATA, pid, i + j, 0);
+                if ((j) % 2 == 1)
+                    oneByte = tmp;
                 if (eightBytes == valueToFind || fourBytes == valueToFind || twoBytes == valueToFind || oneByte == valueToFind)
                 {
                     Match m;
@@ -413,6 +414,7 @@ void CheatEngine::ScanForValue()
                 twoBytes = 0;
                 fourBytes = 0;
                 eightBytes = 0;
+                tmp = tmp >> (8 * stepSize);
             }
         }
         printf(" DONE\n");
@@ -725,6 +727,11 @@ void CheatEngine::ConfirmPlaying()
         if (pid == 0)
         {
             printf("No process attached. Aborting\n");
+            return;
+        }
+        if (!IsTheProcessRunning(pid))
+        {
+            printf("The process has eneded\n");
             return;
         }
         confirmedPlayingFlag = true;
